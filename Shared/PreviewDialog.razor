@@ -1,0 +1,83 @@
+@inject ISnackbar Snackbar
+
+@inject GraphServiceClient Client
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            Preview
+        </MudText>
+    </TitleContent>    
+    <DialogContent>
+        <MudGrid>
+            <MudItem xs="12" sm="12">
+                <MudText Typo="Typo.body1" Class="mb-2">To:</MudText>
+                <MudText Typo="Typo.body1" Class="mb-2">@Model.MergedRecords[Index].ToList</MudText>
+            </MudItem>
+            <MudItem xs="12" sm="12">                
+                <MudText Typo="Typo.body1" Class="mb-2">Cc:</MudText>
+                <MudText Typo="Typo.body1" Class="mb-2">@Model.MergedRecords[Index].CcList</MudText>
+            </MudItem>
+            <MudItem xs="12" sm="12">                
+                <MudText Typo="Typo.body1" Class="mb-2">Bcc:</MudText>
+                <MudText Typo="Typo.body1" Class="mb-2">@Model.MergedRecords[Index].BccList</MudText>
+            </MudItem>
+            <MudItem xs="12" sm="12">
+                <MudText Typo="Typo.body1" Class="mb-2">Subject:</MudText>
+                <MudText Typo="Typo.body1" Class="mb-2">@Model.MergedRecords[Index].MergedSubject</MudText>
+            </MudItem>
+            <MudItem xs="12" sm="12">
+                <MudText Typo="Typo.body1" Class="mb-2">Subject:</MudText>
+                <MudText Typo="Typo.body1" Class="mb-2">@Model.MergedRecords[Index].MergedBody</MudText>
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+
+        <MudButton OnClick="Previous" Disabled=@(Index==0)>Previous</MudButton>
+        
+        <MudText Typo="Typo.body1" Class="mb-2">@PageNumber</MudText>
+        <MudButton OnClick="Next" Disabled=@(Index==Model.MergedRecords.Count()-1)>Next</MudButton>
+
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Success" OnClick="Send">Send</MudButton>
+    </DialogActions>
+</MudDialog>
+@code {
+    public string PageNumber { get => $"{Index +1}/{Model.MergedRecords.Count()}"; }
+
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] 
+    public MergeProcessor Model { get; set; } = null!;
+
+    private int Index { get; set; } = 0;
+
+    private WorkbookTable SelectedTable { get; set; } = null!;
+
+    private void Next()
+    {
+        Index++;
+    }
+    private void Previous()
+    {
+        Index--;
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task Send()
+    {
+        await Model.Send();
+
+        if (Model.SendExceptions.InnerExceptions.Count > 0)
+            Snackbar.Add("Errors Sending Emails", Severity.Error);
+        else            
+            Snackbar.Add("Sent Emails", Severity.Success);
+
+        MudDialog.Close();
+    }
+}

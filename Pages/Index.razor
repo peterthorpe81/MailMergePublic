@@ -1,0 +1,193 @@
+﻿
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@using Microsoft.AspNetCore.Authorization
+@inject GraphServiceClient Client
+@inject AuthenticationStateProvider AuthenticationStateProvider 
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@attribute [Authorize]
+@page "/"
+
+<PageTitle>Mail Merge</PageTitle>
+<MudText Typo="Typo.h3" Class="mb-2" Color="Color.Primary">Mail Merge</MudText>
+
+<MudText Typo="Typo.body1" Class="mb-2" >This application will mail merge an excel table. It will then email all rows in the table using your outlook mail box.</MudText>
+
+<MudText Typo="Typo.body1" Class="mb-2" >Select a file from your one drive below. The file must be an Excel workbook containg a table. An example you can put on onedrive is here: <a href="ExampleMerge.xlsx" download>ExampleMerge.xlsx</a></MudText>
+
+<MudText Typo="Typo.body1" Class="mb-2" >Select the column name containing the To: emails addresses, Cc: and Bcc.</MudText>
+
+<MudText Typo="Typo.body1" Class="mb-2" >The subject and body can then be populated with merge fields from the Excel table. The syntax is ((ColumnName)) in the body or subject to perform replacments.</MudText>
+
+<MudButton Class="pa-2" Variant="Variant.Filled" Color="Color.Primary" @onclick=TestEmail>Test Email</MudButton>
+
+<span Class="pa-2">
+    <FilePicker  OnFileSelected=FileSelected></FilePicker>
+</span>
+@if (Model.Table is not null)
+{
+<MudPaper Class="pa-16 ma-2">
+ <EditForm Model="@Model" OnValidSubmit="Preview">
+<DataAnnotationsValidator/>
+<MudGrid>
+    <MudItem xs="12" sm="12">
+        <MudSelect @bind-Value=Model.ToField  Dense="true" T="WorkbookTableColumn?" Label="To" Variant="Variant.Text">
+            @if(Model?.Table?.Columns is not null)
+            {
+                foreach (var column in Model.Table.Columns)
+                {
+                    <MudSelectItem Value="@column">@column.Name</MudSelectItem>                
+                }       
+            }    
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" sm="12">
+        <MudSelect @bind-Value=Model.CcField  Dense="true" T="WorkbookTableColumn?" Label="Cc" Variant="Variant.Text">
+            @if(Model?.Table?.Columns is not null)
+            {
+                foreach (var column in Model.Table.Columns)
+                {
+                    <MudSelectItem Value="@column">@column.Name</MudSelectItem>                
+                }       
+            }                   
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" sm="12">
+        <MudSelect @bind-Value=Model.BccField  Dense="true" T="WorkbookTableColumn?" Label="Bcc" Variant="Variant.Text">
+            @if(Model?.Table?.Columns is not null)
+            {
+                foreach (var column in Model.Table.Columns)
+                {
+                    <MudSelectItem Value="@column">@column.Name</MudSelectItem>                
+                }       
+            }                    
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" sm="12">
+          <MudTextField @bind-Value="@Model.EmailSubject" Label="Subject" Variant="Variant.Text"></MudTextField>
+    </MudItem>
+    <MudItem xs="12" sm="12">
+          <MudTextField @bind-Value="@Model.EmailBody" Label="Body" Variant="Variant.Text" Lines="4"></MudTextField>
+    </MudItem>
+    <MudItem xs="12" sm="12">          
+        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">Preview</MudButton>
+    </MudItem>
+</MudGrid>
+</EditForm>
+
+  
+
+</MudPaper>
+}
+
+@code 
+{
+    private Microsoft.Graph.User? user;
+
+    private MailMergeModel Model { get; set; } = new MailMergeModel();
+
+    private async Task FileSelected(OneDriveFile file)
+    {        
+        //reset completely for now
+        Model = new MailMergeModel();
+
+        IWorkbookTablesCollectionPage? tables =  await Client.Me.Drives[file.DriveId].Items[file.FileId].Workbook.Tables.Request().GetAsync();
+
+        if (tables is null || tables.Count == 0)
+        {
+            Snackbar.Add("No Tables Found in Excel Sheet", Severity.Info);
+            return;
+        }
+
+        var parameters = new DialogParameters();
+        parameters.Add("Tables", tables);
+
+        var dialog = await DialogService.ShowAsync<TablesDialog>("Select Excel Table", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            Model.Table = (WorkbookTable) result.Data;
+            //add rows and tables as they aren't part of the original tables request
+            Model.Table.Columns = await Client.Me.Drives[file.DriveId].Items[file.FileId].Workbook.Tables[Model.Table.Name].Columns.Request().GetAsync();
+            Model.Table.Rows = await Client.Me.Drives[file.DriveId].Items[file.FileId].Workbook.Tables[Model.Table.Name].Rows.Request().GetAsync();
+            
+            Snackbar.Add($"{Model.Table.Name} Table Selected", Severity.Success);
+            /*string colsList ="";
+            foreach (var column in Model.Columns)
+                {
+                    colsList += column.Name + ", ";            
+                } 
+            Snackbar.Add($"{colsList}", Severity.Success);*/
+        }
+        else
+        {            
+            Snackbar.Add("Cancelled Table Selection", Severity.Info);
+        }
+        StateHasChanged();
+    }
+
+    
+    public async Task Preview()
+    { 
+        Snackbar.Add("Previewing", Severity.Info);
+        MergeProcessor merge = await MergeProcessor.Create(Client, Model);
+        Snackbar.Add("Processed Preview", Severity.Info);
+        if (merge.MergeValid)
+        {                
+            var parameters = new DialogParameters();
+            parameters.Add("Model", merge);
+
+            var dialog = await DialogService.ShowAsync<PreviewDialog>("Preview", parameters);
+        }
+        else
+        {            
+            Snackbar.Add("Merge Invalid", Severity.Error);
+        }
+    }
+
+
+    public async Task TestEmail()
+    { 
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();  
+        var claims = authState.User;  
+        if (claims?.Identity?.IsAuthenticated != true)  
+        {            
+            Navigation.NavigateToLogin("authentication/login");
+        }      
+        
+        var request = Client.Me.Request();
+        user = await request.GetAsync();
+        
+        List<Recipient> toRecipients = new List<Recipient>();
+         toRecipients.Add(new Recipient
+            {
+                EmailAddress = new Microsoft.Graph.EmailAddress
+                {
+                    Address = user.UserPrincipalName
+                }
+            });
+
+        var message = new Microsoft.Graph.Message
+        {
+            Subject = "Mail Merge App Test",
+            Body = new ItemBody
+            {
+                ContentType = Microsoft.Graph.BodyType.Html,
+                Content = "<div>Test email from mail merge app.</div>"
+            }, 
+            ToRecipients = toRecipients
+        };
+
+        await Client.Me
+            .SendMail(message, false)
+            .Request()
+            .PostAsync();
+    }
+    protected override async Task OnInitializedAsync()
+    {
+        var request = Client.Me.Request();
+        user = await request.GetAsync();        
+    }
+}

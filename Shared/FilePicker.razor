@@ -1,0 +1,77 @@
+@implements IAsyncDisposable
+@using Microsoft.JSInterop
+@using Microsoft.AspNetCore.Components;
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication;
+@inject IJSRuntime JSRuntime
+@inject ClientAppSettings ClientAppSettings
+
+<MudButton Variant="Variant.Filled" Color="Color.Primary" @onclick=SelectFile>Select File</MudButton>
+
+
+@code
+{
+    private OneDriveFile? file;
+    [Parameter]
+    public EventCallback<OneDriveFile> OnFileSelected { get; set; }
+
+    [Inject]
+    IAccessTokenProvider TokenProvider { get; set; } = null!;
+    public string AccessToken { get; set; } = null!;
+    private IJSObjectReference? _module;
+    private IJSObjectReference? _filePickerJS;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var accessTokenResult = await TokenProvider.RequestAccessToken();
+        AccessToken = string.Empty;
+
+        if (accessTokenResult.TryGetToken(out var token))
+        {
+            AccessToken = token.Value;
+        }
+    }
+
+    public async Task SelectFile()
+    { 
+        
+        await (await FilePickerJS()).InvokeVoidAsync("launchOneDrivePicker");
+    }
+
+    protected override async Task OnAfterRenderAsync (bool firstRender)
+    {
+        //await FilePickerJS();
+    }
+
+      public async Task<IJSObjectReference> FilePickerJS()
+        {
+            if (_filePickerJS is not null)
+                    return _filePickerJS;
+
+            //wait for JSRuntime
+            while (JSRuntime is null) await Task.Delay(100);
+
+
+        var dotNetObjRef = DotNetObjectReference.Create(this);
+            _module = await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./Shared/FilePicker.razor.js");
+            _filePickerJS = await _module.InvokeAsync<IJSObjectReference>("filepicker", ClientAppSettings.ClientId, AccessToken, dotNetObjRef);
+            return _filePickerJS;
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (_module != null)
+                await _module.DisposeAsync();
+
+            if (_filePickerJS != null)
+                await _filePickerJS.DisposeAsync();
+        }
+
+        [JSInvokable]
+        public async Task<string> FileSelected(object driveID, object id)
+        {
+            file = new OneDriveFile() { FileId = id.ToString(), DriveId = driveID.ToString() };
+            await OnFileSelected.InvokeAsync(file);
+
+            return $"Hello, {driveID} {id}";
+        }
+}

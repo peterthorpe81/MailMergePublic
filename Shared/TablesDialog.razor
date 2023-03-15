@@ -1,0 +1,44 @@
+@inject ISnackbar Snackbar
+
+@inject GraphServiceClient Client
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            Select Excel Table
+        </MudText>
+    </TitleContent>    
+    <DialogContent>
+        <MudSelect @bind-Value=SelectedTable  Dense="true" T="WorkbookTable" Label="Table" Variant="Variant.Text">
+            @foreach (var table in Tables)
+            {
+                <MudSelectItem Value="@table">@table.Name</MudSelectItem>                
+            }
+        </MudSelect>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Success" OnClick="SelectTable">Ok</MudButton>
+    </DialogActions>
+</MudDialog>
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] 
+    public IWorkbookTablesCollectionPage Tables { get; set; } = null!;
+
+    private WorkbookTable SelectedTable { get; set; } = null!;
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void SelectTable()
+    {
+        if (SelectedTable is null)
+            Snackbar.Add("Select A Table", Severity.Warning);
+        else
+            MudDialog.Close(DialogResult.Ok(SelectedTable));
+    }
+}
