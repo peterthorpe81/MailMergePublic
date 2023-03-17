@@ -5,7 +5,17 @@
 @inject IJSRuntime JSRuntime
 @inject ClientAppSettings ClientAppSettings
 
-<MudButton Variant="Variant.Filled" Color="Color.Primary" @onclick=SelectFile>Select File</MudButton>
+<MudButton Variant="Variant.Filled" Color="Color.Primary" @onclick=SelectFile>
+    @if (Processing)
+    {
+        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+        <MudText Class="ms-2">Processing</MudText>
+    }
+    else
+    {
+        <MudText>Select File</MudText>
+    }
+</MudButton>
 
 
 @code
@@ -13,12 +23,15 @@
     private OneDriveFile? file;
     [Parameter]
     public EventCallback<OneDriveFile> OnFileSelected { get; set; }
+    [Parameter]
+    public bool Processing { get; set; }
 
     [Inject]
     IAccessTokenProvider TokenProvider { get; set; } = null!;
     public string AccessToken { get; set; } = null!;
     private IJSObjectReference? _module;
     private IJSObjectReference? _filePickerJS;
+
 
     protected override async Task OnInitializedAsync()
     {
@@ -39,6 +52,7 @@
 
     protected override async Task OnAfterRenderAsync (bool firstRender)
     {
+        await Task.Yield();
         //await FilePickerJS();
     }
 
@@ -67,11 +81,11 @@
         }
 
         [JSInvokable]
-        public async Task<string> FileSelected(object driveID, object id)
+        public async Task<string> FileSelected(string driveID, string id)
         {
-            file = new OneDriveFile() { FileId = id.ToString(), DriveId = driveID.ToString() };
+            file = new OneDriveFile() { FileId = id, DriveId = driveID };
             await OnFileSelected.InvokeAsync(file);
 
-            return $"Hello, {driveID} {id}";
+            return $"";
         }
 }

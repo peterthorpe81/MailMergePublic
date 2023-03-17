@@ -22,7 +22,7 @@ export function filepicker(clientId, accessToken, dotNetObjRef) {
                         });
                     };
             },
-            cancel: function () { alert('Operation cancelled'); },
+            cancel: function () { },
             error: function (e) { alert('An error occourred: ' + e); }
         }
         OneDrive.open(odOptions);

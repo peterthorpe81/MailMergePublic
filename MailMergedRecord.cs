@@ -3,6 +3,7 @@ using Microsoft.Graph;
 using System.Text.RegularExpressions;
 using System.Text.Json.Nodes;
 using System.Text.Json;
+using System.Web;
 
 namespace MailMerge;
 public partial class MailMergedRecord
@@ -19,44 +20,37 @@ public partial class MailMergedRecord
 
     private static EmailAddressAttribute emailValid = new EmailAddressAttribute();
 
-    public AggregateException Exceptions { get; private set; }
+    public List<Exception> Exceptions { get; private set; }
     private MailMergedRecord(MailMergeModel template, WorkbookTableRow row)
     {        
         Row = row;
         Template = template;
-        Exceptions = new AggregateException();
+        Exceptions = new List<Exception>();
     }
     private async Task Initialize()
     {
         //possibly async in future
         await Task.Yield();
-        /*
-        ArgumentException.ThrowIfNullOrEmpty(Template.ToField);
-        ArgumentException.ThrowIfNullOrEmpty(Template.EmailBody);
-        ArgumentException.ThrowIfNullOrEmpty(Template.EmailSubject);
-        */
-        //Values = Row.Values.RootElement..Parse("[[\"1\",\"2\",\"3\",\"4\"]]")
 
-        // parse from stream, string, utf8JsonReader
-       // JsonArray? array = Row.Values.RootElement.Parse()?.AsArray();
-        //object[] rowvaluesx =    JsonSerializer.Deserialize<object[]>(Row.Values)!;
         object[][] rowvaluesx =    JsonSerializer.Deserialize<object[][]>(Row.Values)!;
         object[] rowvalues = rowvaluesx[0];
 
   
         if (Template.From is null || !emailValid.IsValid(Template.From))                        
-            Exceptions.InnerExceptions.Append(new ArgumentException($"Invalid From: Email {Template.From}"));
+            Exceptions.Add(new ArgumentException($"Invalid From: Email {Template.From} Row: {Row.Index + 1}"));
         else
             From = Template.From;
+
         if (Template.ToField is not null)
-            To = AddAddresses(CellValue(Template.ToField, rowvalues), true);  
+            To = AddAddresses(CellValue(Template.ToField, rowvalues), Row.Index, true);  
         else            
-            Exceptions.InnerExceptions.Append(new ArgumentException($"Missing To: Email Address"));
+            Exceptions.Add(new ArgumentException($"Missing To: Email Address Row: {Row.Index + 1}"));
 
         if (Template.CcField is not null)
-            Cc = AddAddresses(CellValue(Template.CcField, rowvalues));
+            Cc = AddAddresses(CellValue(Template.CcField, rowvalues), Row.Index);
+            
         if (Template.BccField is not null)
-            Bcc = AddAddresses(CellValue(Template.BccField, rowvalues));
+            Bcc = AddAddresses(CellValue(Template.BccField, rowvalues), Row.Index);
 
 
         if (Template.EmailBody is not null)
@@ -66,20 +60,17 @@ public partial class MailMergedRecord
                 return CellValue(key.Substring(2,key.Length-4), rowvalues);
             });
         else            
-            Exceptions.InnerExceptions.Append(new ArgumentException($"Email Body Is Empty"));
+            Exceptions.Add(new ArgumentException($"Email Body Is Empty"));
 
         
         if (Template.EmailSubject is not null)
             MergedSubject = MergeFields().Replace(Template.EmailSubject, delegate(Match match)
             {
                 string key = match.Groups[0].Value;
-                /*Console.WriteLine("keyx " + keyx);
-                string key = match.Groups[1].Value;
-                Console.WriteLine("key" + key);*/
                 return CellValue(key.Substring(2,key.Length-4), rowvalues);
             });
         else            
-            Exceptions.InnerExceptions.Append(new ArgumentException($"Subject Is Empty"));
+            Exceptions.Add(new ArgumentException($"Subject Is Empty"));
 
         
     } 
@@ -90,16 +81,16 @@ public partial class MailMergedRecord
         var column = Template.Table.Columns.Where(x => x.Name == columnName).SingleOrDefault();
         if (column is null)
         {
-            Exceptions.InnerExceptions.Append(new ArgumentException($"Column {columnName} Not Found"));
+            Exceptions.Add(new ArgumentException($"Column {columnName} Not Found"));
             return String.Empty;
         }
-        return row[Template.Table.Columns.IndexOf(column)]?.ToString() ?? String.Empty;
+        return HttpUtility.HtmlEncode(row[Template.Table.Columns.IndexOf(column)]?.ToString() ?? String.Empty);
     }
 
     public string CellValue(WorkbookTableColumn column, object[] row)
     {
         ArgumentNullException.ThrowIfNull(Template?.Table?.Columns);
-        return row[Template.Table.Columns.IndexOf(column)]?.ToString() ?? String.Empty;
+        return HttpUtility.HtmlEncode(row[Template.Table.Columns.IndexOf(column)]?.ToString() ?? String.Empty);
     }
 
     public MailMergeModel Template { get; private set;}
@@ -108,9 +99,9 @@ public partial class MailMergedRecord
     public List<Recipient> To { get; private set;} = null!;
     public List<Recipient> Cc { get; private set;} = null!;
     public List<Recipient> Bcc { get; private set;} = null!;
-    public string MergedBody { get; private set;} = null!;
-    public string MergedSubject { get; private set;} = null!;
-    public bool Valid { get => Exceptions.InnerExceptions.Count == 0 ? true : false; }
+    public string MergedBody { get; set;} = null!;
+    public string MergedSubject { get; set;} = null!;
+    public bool Valid { get => Exceptions.Count == 0 ? true : false; }
 
     public string ToList
     {
@@ -164,7 +155,7 @@ public partial class MailMergedRecord
     }
 
 
-    private List<Recipient> AddAddresses(string addresses, bool required = false)
+    private List<Recipient> AddAddresses(string addresses, int? RowIndex, bool required = false)
     {
         List<Recipient> recipients = new List<Recipient>();
         foreach (var address in addresses.Split(';').Select(p => p.Trim()))
@@ -181,11 +172,11 @@ public partial class MailMergedRecord
             }
             else
             {
-                Exceptions.InnerExceptions.Append(new ArgumentException($"Invalid Email {address}"));
+                Exceptions.Add(new ArgumentException($"Invalid Email {address} Row: {Row.Index + 1}"));
             }
         }
-        if (required && recipients.Count > 0)
-            Exceptions.InnerExceptions.Append(new ArgumentException($"Missing Required Email Address"));
+        if (required && recipients.Count == 0)
+            Exceptions.Add(new ArgumentException($"Missing Required Email Address Row: {Row.Index + 1}"));
 
         return recipients;
     }

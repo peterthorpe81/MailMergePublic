@@ -9,16 +9,18 @@
         </MudText>
     </TitleContent>    
     <DialogContent>
-        <MudSelect @bind-Value=SelectedTable  Dense="true" T="WorkbookTable" Label="Table" Variant="Variant.Text">
-            @foreach (var table in Tables)
-            {
-                <MudSelectItem Value="@table">@table.Name</MudSelectItem>                
-            }
-        </MudSelect>
+        <div style="min-width:250px">
+            <MudSelect @bind-Value=SelectedTable  Dense="true" T="WorkbookTable" Label="Table" Variant="Variant.Text" FullWidth=true>
+                @foreach (var table in Tables)
+                {
+                    <MudSelectItem Value="@table">@table.Name</MudSelectItem>                
+                }
+            </MudSelect>
+        </div>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Cancel">Cancel</MudButton>
-        <MudButton Color="Color.Success" OnClick="SelectTable">Ok</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SelectTable">Ok</MudButton>
     </DialogActions>
 </MudDialog>
 @code {

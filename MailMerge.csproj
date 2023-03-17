@@ -6,16 +6,20 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <InvariantGlobalization>true</InvariantGlobalization>
     <BlazorEnableTimeZoneSupport>false</BlazorEnableTimeZoneSupport>
-    <LangVersion>latest</LangVersion>
+    <ObfuscationMode>Xor</ObfuscationMode>         
+    <RenameDllsTo>bin</RenameDllsTo>
+    <XorKey>a</XorKey>
   </PropertyGroup>
 
   <ItemGroup>
+      <TrimmerRootAssembly Include="Microsoft.AspNetCore.Components.WebAssembly.Authentication" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="7.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="7.0.0" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Authentication.WebAssembly.Msal" Version="7.0.0" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="7.0.0" />
     <PackageReference Include="Microsoft.Graph" Version="4.54.0" />
-    <PackageReference Include="MudBlazor" Version="6.1.9" />
+    <PackageReference Include="MudBlazor" Version="6.2.0" />
+        <PackageReference Include="BlazorWasmAntivirusProtection" Version="2.4.5" />
   </ItemGroup>
 
 </Project>

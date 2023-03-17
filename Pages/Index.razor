@@ -10,29 +10,38 @@
 @page "/"
 
 <PageTitle>Mail Merge</PageTitle>
-<MudText Typo="Typo.h3" Class="mb-2" Color="Color.Primary">Mail Merge</MudText>
 
-<MudText Typo="Typo.body1" Class="mb-2" >This application will mail merge an excel table. It will then email all rows in the table using your outlook mail box.</MudText>
+<MudText Typo="Typo.body1" Class="my-2" >This application will mail merge an excel table. It will then email all rows in the table using your outlook mail box.</MudText>
 
-<MudText Typo="Typo.body1" Class="mb-2" >Select a file from your one drive below. The file must be an Excel workbook containg a table. An example you can put on onedrive is here: <a href="ExampleMerge.xlsx" download>ExampleMerge.xlsx</a></MudText>
+<MudText Typo="Typo.body1" Class="mb-2" >Select a file from your one drive below. The file must be an Excel workbook containg a table. An example you can put on onedrive is here: 
+<MudLink Href="ExampleMerge.xlsx" Underline="Underline.Always" Color="Color.Primary" download>ExampleMerge.xlsx</MudLink>
+</MudText>
 
 <MudText Typo="Typo.body1" Class="mb-2" >Select the column name containing the To: emails addresses, Cc: and Bcc.</MudText>
 
 <MudText Typo="Typo.body1" Class="mb-2" >The subject and body can then be populated with merge fields from the Excel table. The syntax is ((ColumnName)) in the body or subject to perform replacments.</MudText>
-
+@*
 <MudButton Class="pa-2" Variant="Variant.Filled" Color="Color.Primary" @onclick=TestEmail>Test Email</MudButton>
+*@
 
-<span Class="pa-2">
-    <FilePicker  OnFileSelected=FileSelected></FilePicker>
-</span>
+<MudPaper Spacing=1 Class="px-8 py-2 ma-2">
+    <div class="d-flex gap-4 align-center">
+        <FilePicker Processing=@SelectingFile OnFileSelected=FileSelected></FilePicker>
+
+        @if(@Model?.Table?.Name is not null)
+        {
+            <MudText Typo="Typo.body1">@Model.Table &gt; @Model.Table.Name</MudText>
+        }
+    </div>
+</MudPaper>
+
+
 @if (Model.Table is not null)
 {
-<MudPaper Class="pa-16 ma-2">
- <EditForm Model="@Model" OnValidSubmit="Preview">
-<DataAnnotationsValidator/>
-<MudGrid>
+<MudPaper Spacing=1 Class="pa-8 ma-2">
+<MudGrid Class="mud-grid-spacing-xs-2">
     <MudItem xs="12" sm="12">
-        <MudSelect @bind-Value=Model.ToField  Dense="true" T="WorkbookTableColumn?" Label="To" Variant="Variant.Text">
+        <MudSelect @bind-Value=Model.ToField Margin="Margin.Dense"  Dense="true" T="WorkbookTableColumn?" Label="To" Variant="Variant.Outlined">
             @if(Model?.Table?.Columns is not null)
             {
                 foreach (var column in Model.Table.Columns)
@@ -43,7 +52,7 @@
         </MudSelect>
     </MudItem>
     <MudItem xs="12" sm="12">
-        <MudSelect @bind-Value=Model.CcField  Dense="true" T="WorkbookTableColumn?" Label="Cc" Variant="Variant.Text">
+        <MudSelect @bind-Value=Model.CcField Margin="Margin.Dense"  Dense="true" T="WorkbookTableColumn?" Label="Cc" Variant="Variant.Outlined">
             @if(Model?.Table?.Columns is not null)
             {
                 foreach (var column in Model.Table.Columns)
@@ -54,7 +63,7 @@
         </MudSelect>
     </MudItem>
     <MudItem xs="12" sm="12">
-        <MudSelect @bind-Value=Model.BccField  Dense="true" T="WorkbookTableColumn?" Label="Bcc" Variant="Variant.Text">
+        <MudSelect @bind-Value=Model.BccField Margin="Margin.Dense"  Dense="true" T="WorkbookTableColumn?" Label="Bcc" Variant="Variant.Outlined">
             @if(Model?.Table?.Columns is not null)
             {
                 foreach (var column in Model.Table.Columns)
@@ -65,16 +74,38 @@
         </MudSelect>
     </MudItem>
     <MudItem xs="12" sm="12">
-          <MudTextField @bind-Value="@Model.EmailSubject" Label="Subject" Variant="Variant.Text"></MudTextField>
+          <MudTextField @bind-Value=Model.EmailSubject Margin="Margin.Dense"  Label="Subject" Variant="Variant.Outlined"></MudTextField>
     </MudItem>
     <MudItem xs="12" sm="12">
-          <MudTextField @bind-Value="@Model.EmailBody" Label="Body" Variant="Variant.Text" Lines="4"></MudTextField>
+         <InputRichText @ref=bodyEditor @bind-Value=Model.EmailBody></InputRichText>
+    </MudItem>
+    <MudItem xs="12" sm="12">
+        @if(Model?.Table?.Columns is not null)
+        {
+            <div class="d-flex gap-1 align-center">
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Columns. </MudText><MudText Typo="Typo.subtitle2" Class="mb-2">Press to insert.</MudText>
+            </div>          
+            
+            foreach (var column in Model.Table.Columns)
+            {                
+                <MudChip @onclick=@(x => AddField(@column.Name)) Variant="Variant.Outlined" Color="Color.Primary">@column.Name</MudChip>             
+            }       
+        }  
     </MudItem>
     <MudItem xs="12" sm="12">          
-        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">Preview</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Preview">
+            @if (PreviewingMerge)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                <MudText Class="ms-2">Processing</MudText>
+            }
+            else
+            {
+                <MudText>Preview</MudText>
+            }
+        </MudButton>
     </MudItem>
 </MudGrid>
-</EditForm>
 
   
 
@@ -83,25 +114,41 @@
 
 @code 
 {
+    private InputRichText bodyEditor = default!;
+    private MergeProcessor? merge;
     private Microsoft.Graph.User? user;
+
+    private bool SelectingFile { get; set;}
+    private bool PreviewingMerge { get; set;}
 
     private MailMergeModel Model { get; set; } = new MailMergeModel();
 
     private async Task FileSelected(OneDriveFile file)
     {        
+        SelectingFile = true;
         //reset completely for now
-        Model = new MailMergeModel();
-
-        IWorkbookTablesCollectionPage? tables =  await Client.Me.Drives[file.DriveId].Items[file.FileId].Workbook.Tables.Request().GetAsync();
+        Model = new MailMergeModel() { From = user?.UserPrincipalName};
+        IWorkbookTablesCollectionPage? tables;
+        try 
+        {
+            tables =  await Client.Me.Drives[file.DriveId].Items[file.FileId].Workbook.Tables.Request().GetAsync();
+        } 
+        catch
+        {
+            Snackbar.Add("Error Getting Excel Workbook Using Graph", Severity.Info);
+            SelectingFile = false;
+            return;
+        }
 
         if (tables is null || tables.Count == 0)
         {
             Snackbar.Add("No Tables Found in Excel Sheet", Severity.Info);
+            SelectingFile = false;
             return;
         }
 
         var parameters = new DialogParameters();
-        parameters.Add("Tables", tables);
+        parameters.Add(nameof(TablesDialog.Tables), tables);
 
         var dialog = await DialogService.ShowAsync<TablesDialog>("Select Excel Table", parameters);
         var result = await dialog.Result;
@@ -109,44 +156,77 @@
         if (!result.Canceled)
         {
             Model.Table = (WorkbookTable) result.Data;
-            //add rows and tables as they aren't part of the original tables request
-            Model.Table.Columns = await Client.Me.Drives[file.DriveId].Items[file.FileId].Workbook.Tables[Model.Table.Name].Columns.Request().GetAsync();
-            Model.Table.Rows = await Client.Me.Drives[file.DriveId].Items[file.FileId].Workbook.Tables[Model.Table.Name].Rows.Request().GetAsync();
-            
-            Snackbar.Add($"{Model.Table.Name} Table Selected", Severity.Success);
-            /*string colsList ="";
-            foreach (var column in Model.Columns)
-                {
-                    colsList += column.Name + ", ";            
-                } 
-            Snackbar.Add($"{colsList}", Severity.Success);*/
+            try 
+            {
+                //add rows and tables as they aren't part of the original tables request
+                Model.Table.Columns = await Client.Me.Drives[file.DriveId].Items[file.FileId].Workbook.Tables[Model.Table.Name].Columns.Request().GetAsync();
+                Model.Table.Rows = await Client.Me.Drives[file.DriveId].Items[file.FileId].Workbook.Tables[Model.Table.Name].Rows.Request().GetAsync();            
+            } 
+            catch
+            {
+                Snackbar.Add("Error Getting Excel Table Using Graph", Severity.Info);
+                SelectingFile = false;
+                return;
+            }
         }
         else
         {            
             Snackbar.Add("Cancelled Table Selection", Severity.Info);
+            SelectingFile = false;
         }
-        StateHasChanged();
-    }
 
+        SelectingFile = false;
+    }
     
     public async Task Preview()
     { 
-        Snackbar.Add("Previewing", Severity.Info);
-        MergeProcessor merge = await MergeProcessor.Create(Client, Model);
-        Snackbar.Add("Processed Preview", Severity.Info);
+        PreviewingMerge = true;
+        merge = await MergeProcessor.Create(Client, Model);
         if (merge.MergeValid)
-        {                
-            var parameters = new DialogParameters();
-            parameters.Add("Model", merge);
+        {          
+            DialogOptions options = new DialogOptions() 
+            { 
+                MaxWidth = MaxWidth.ExtraExtraLarge, 
+                FullWidth = false,
+                FullScreen = false, 
+                CloseButton = false, 
+                NoHeader = false,
+                DisableBackdropClick = false,
+                Position = DialogPosition.Center
+            };
 
-            var dialog = await DialogService.ShowAsync<PreviewDialog>("Preview", parameters);
+            var parameters = new DialogParameters();
+            parameters.Add(nameof(PreviewDialog.Model), merge);
+
+            var dialog = await DialogService.ShowAsync<PreviewDialog>("Preview", parameters, options);
         }
         else
         {            
-            Snackbar.Add("Merge Invalid", Severity.Error);
+            DialogOptions options = new DialogOptions() 
+            { 
+                MaxWidth = MaxWidth.ExtraExtraLarge, 
+                FullWidth = false,
+                FullScreen = false, 
+                CloseButton = false, 
+                NoHeader = false,
+                DisableBackdropClick = false,
+                Position = DialogPosition.Center
+            };
+
+            var parameters = new DialogParameters();
+            parameters.Add(nameof(ExceptionDialog.Exceptions), merge.MergeExceptions);
+
+            var dialog = await DialogService.ShowAsync<ExceptionDialog>("Merge Exceptions", parameters, options);
         }
+        
+        PreviewingMerge = false;
     }
 
+    public async Task AddField(string column)
+    { 
+        if (bodyEditor is not null)
+            await bodyEditor.InsertText($"(({column}))");
+    }
 
     public async Task TestEmail()
     { 

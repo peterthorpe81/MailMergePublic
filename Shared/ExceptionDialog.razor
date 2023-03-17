@@ -1,0 +1,23 @@
+@inject ISnackbar Snackbar
+
+<MudDialog>   
+    <DialogContent>
+        <MudContainer Class="pa-0" Style="height: calc(100vh - 15rem);  width: calc(100vw - 10rem); overflow-y: scroll;">
+            <ExceptionList Exceptions=@Exceptions></ExceptionList>
+        </MudContainer>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Ok">Ok</MudButton>
+    </DialogActions>
+</MudDialog>
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] 
+    public List<Exception> Exceptions { get; set; } = null!;
+
+    private async Task Ok()
+    {
+        MudDialog.Close();
+    }
+}

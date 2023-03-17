@@ -1,0 +1,3 @@
+.ck.ck-content:not(.ck-comment__input *) {
+    height: 300px;
+}

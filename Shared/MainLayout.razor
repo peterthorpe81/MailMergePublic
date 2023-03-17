@@ -1,11 +1,46 @@
 ﻿@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@inject NavigationManager Navigation
 
 <MudThemeProvider/>
 <MudDialogProvider/>
 <MudSnackbarProvider/>
 
 <MudLayout>
+    <MudAppBar>
+       <MudText Typo="Typo.h5" Class="ml-3">Mail Merge</MudText>
+       <MudSpacer />
+       <AuthorizeView>
+                <Authorized Context="ctx">
+                    <MudMenu Edge="Edge.End">
+                        <ActivatorContent> 
+                            <MudText     Color="Color.Inherit" Edge="Edge.End">@ctx?.User?.Identity?.Name</MudText>
+                            @*<MudAvatar Color="Color.Inherit" Edge="Edge.End">@ctx?.User?.Identity?.Name</MudAvatar>*@
+                        </ActivatorContent>
+                    <ChildContent>
+                        <MudMenuItem Color="Color.Inherit">@ctx?.User?.Identity?.Name</MudMenuItem>
+                        <MudMenuItem Color="Color.Inherit" @onclick="BeginLogout">Sign Out</MudMenuItem>
+                    </ChildContent>
+                    </MudMenu>
+                </Authorized>
+                <NotAuthorized>
+                    <MudLink Color="Color.Inherit" Href="authentication/login">Login</MudLink>
+                </NotAuthorized>
+        </AuthorizeView>
+    </MudAppBar>
+
     <MudMainContent>
-        @Body
+        <div class="ma-4">
+            @Body
+        </div>        
     </MudMainContent>
 </MudLayout>
+
+@code
+{    
+    private async Task BeginLogout(MouseEventArgs args)
+    {
+        await Task.Yield();
+        Navigation.NavigateToLogout("authentication/logout");
+    }
+}

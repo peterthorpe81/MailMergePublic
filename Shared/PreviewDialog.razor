@@ -1,51 +1,55 @@
 @inject ISnackbar Snackbar
-
+@inject IDialogService DialogService
 @inject GraphServiceClient Client
 
-<MudDialog>
-    <TitleContent>
-        <MudText Typo="Typo.h6">
-            Preview
-        </MudText>
-    </TitleContent>    
+<MudDialog>   
     <DialogContent>
+        <MudContainer Style="height: calc(100vh - 15rem);  width: calc(100vw - 10rem); overflow-y: scroll;">
         <MudGrid>
             <MudItem xs="12" sm="12">
-                <MudText Typo="Typo.body1" Class="mb-2">To:</MudText>
-                <MudText Typo="Typo.body1" Class="mb-2">@Model.MergedRecords[Index].ToList</MudText>
+                <MudText Typo="Typo.body1" Class="mb-2">To: @Model.MergedRecords[Index].ToList</MudText>
             </MudItem>
             <MudItem xs="12" sm="12">                
-                <MudText Typo="Typo.body1" Class="mb-2">Cc:</MudText>
-                <MudText Typo="Typo.body1" Class="mb-2">@Model.MergedRecords[Index].CcList</MudText>
+                <MudText Typo="Typo.body1" Class="mb-2">Cc: @Model.MergedRecords[Index].CcList</MudText>
             </MudItem>
             <MudItem xs="12" sm="12">                
-                <MudText Typo="Typo.body1" Class="mb-2">Bcc:</MudText>
-                <MudText Typo="Typo.body1" Class="mb-2">@Model.MergedRecords[Index].BccList</MudText>
+                <MudText Typo="Typo.body1" Class="mb-2">Bcc: @Model.MergedRecords[Index].BccList</MudText>
             </MudItem>
             <MudItem xs="12" sm="12">
-                <MudText Typo="Typo.body1" Class="mb-2">Subject:</MudText>
-                <MudText Typo="Typo.body1" Class="mb-2">@Model.MergedRecords[Index].MergedSubject</MudText>
+                <MudText Typo="Typo.body1" Class="mb-2">Subject: @Model.MergedRecords[Index].MergedSubject</MudText>
             </MudItem>
             <MudItem xs="12" sm="12">
-                <MudText Typo="Typo.body1" Class="mb-2">Subject:</MudText>
-                <MudText Typo="Typo.body1" Class="mb-2">@Model.MergedRecords[Index].MergedBody</MudText>
+                <MudText Typo="Typo.body1" Class="mb-2">Body:</MudText>                
+                <InputRichText @ref=bodyEdit @bind-Value=@Model.MergedRecords[Index].MergedBody></InputRichText>
             </MudItem>
         </MudGrid>
+        </MudContainer>
     </DialogContent>
     <DialogActions>
-
-        <MudButton OnClick="Previous" Disabled=@(Index==0)>Previous</MudButton>
+        <MudButton Variant="Variant.Text" OnClick="Previous" Disabled=@(Index==0)>&lt;</MudButton>
         
         <MudText Typo="Typo.body1" Class="mb-2">@PageNumber</MudText>
-        <MudButton OnClick="Next" Disabled=@(Index==Model.MergedRecords.Count()-1)>Next</MudButton>
+        <MudButton Variant="Variant.Text" OnClick="Next" Disabled=@(Index==Model.MergedRecords.Count()-1)>&gt;</MudButton>
 
-        <MudButton OnClick="Cancel">Cancel</MudButton>
-        <MudButton Color="Color.Success" OnClick="Send">Send</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="Cancel" Disabled=Model.Sending>Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Send" Disabled=Model.Sending>            
+            @if (Model.Sending)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                <MudText Class="ms-2">@ProgressReport</MudText>
+            }
+            else
+            {
+                <MudText>Send</MudText>
+            }
+        </MudButton>
     </DialogActions>
 </MudDialog>
 @code {
+
     public string PageNumber { get => $"{Index +1}/{Model.MergedRecords.Count()}"; }
 
+    private InputRichText bodyEdit = null!;
     [CascadingParameter] MudDialogInstance MudDialog { get; set; } = null!;
 
     [Parameter] 
@@ -53,15 +57,19 @@
 
     private int Index { get; set; } = 0;
 
+    private string ProgressReport {get; set; } = "";
+
     private WorkbookTable SelectedTable { get; set; } = null!;
 
-    private void Next()
+    private async Task Next()
     {
         Index++;
+        await bodyEdit.Update(Model.MergedRecords[Index].MergedBody);
     }
-    private void Previous()
+    private async Task Previous()
     {
         Index--;
+        await bodyEdit.Update(Model.MergedRecords[Index].MergedBody);
     }
 
     private void Cancel()
@@ -71,10 +79,31 @@
 
     private async Task Send()
     {
-        await Model.Send();
+        IProgress<string> progress = new Progress<string>(report =>
+        {
+            ProgressReport = report;
+        });
+        
+        await Model.Send(progress);
 
-        if (Model.SendExceptions.InnerExceptions.Count > 0)
-            Snackbar.Add("Errors Sending Emails", Severity.Error);
+        if (Model.SendExceptions.Count > 0)
+        {            
+            DialogOptions options = new DialogOptions() 
+            { 
+                MaxWidth = MaxWidth.ExtraExtraLarge, 
+                FullWidth = false,
+                FullScreen = false, 
+                CloseButton = false, 
+                NoHeader = false,
+                DisableBackdropClick = false,
+                Position = DialogPosition.Center
+            };
+
+            var parameters = new DialogParameters();
+            parameters.Add(nameof(ExceptionDialog.Exceptions), Model.SendExceptions);
+
+            var dialog = await DialogService.ShowAsync<ExceptionDialog>("Send Exceptions", parameters, options);
+        }
         else            
             Snackbar.Add("Sent Emails", Severity.Success);
 

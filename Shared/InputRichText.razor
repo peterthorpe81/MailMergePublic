@@ -1,0 +1,76 @@
+@implements IAsyncDisposable
+@inherits InputTextArea
+@using Microsoft.JSInterop
+@inject IJSRuntime JSRuntime
+
+<textarea  @ref=_elementReference
+       class="@CssClass"
+       value="@CurrentValue"
+       style="display: none;"></textarea>
+
+@code { 
+    ElementReference _elementReference;
+    private Task<IJSObjectReference>? _module;
+    private Task<IJSObjectReference> Module => _module ??= JSRuntime.InvokeAsync<IJSObjectReference>("import", "./Shared/InputRichText.razor.js").AsTask();
+   
+    public IJSObjectReference? RichEditJs { get; private set;}
+
+
+
+    private Task? _initTask;
+    private Task InitTask => _initTask ??= Init();
+
+    private async Task Init(bool rendered = true)
+    {      
+        if (RichEditJs == null)          
+            RichEditJs = await (await Module).InvokeAsync<IJSObjectReference>("richedit");
+        if (rendered)
+            await RichEditJs.InvokeVoidAsync("init", _elementReference, DotNetObjectReference.Create(this));
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {         
+        await Init(false);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {        
+        await InitTask;
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    [JSInvokable]
+    public Task EditorDataChanged(string data)
+    {
+        CurrentValue = data;
+        //StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    public async Task Update(string value)
+    {
+        await InitTask;
+        if (RichEditJs != null)                
+            await RichEditJs.InvokeVoidAsync("update", value);
+    }
+    
+    public async Task InsertText(string value)
+    {
+        await InitTask;
+        if (RichEditJs != null)                
+            await RichEditJs.InvokeVoidAsync("insertText", value);
+    }
+
+    public async ValueTask DisposeAsync()
+    {   
+        if (RichEditJs != null) 
+            await RichEditJs.InvokeVoidAsync("destroy");
+
+        if (RichEditJs != null)
+            await RichEditJs.DisposeAsync();
+
+        if (_module != null)
+            await (await _module).DisposeAsync();
+
+    }
+}
